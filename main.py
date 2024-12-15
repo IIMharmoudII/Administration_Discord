@@ -20,6 +20,34 @@ BUMP_DELAY = timedelta(hours=2)  # Délai entre deux bumps (2 heures)
 BUMP_ROLE_ID = 1314722162589831198  # ID du rôle à mentionner
 DISBOARD_BOT_ID = 302050872383242240  # ID de Disboard
 
+# === Événement : Quand le bot est prêt ===
+@bot.event
+async def on_ready():
+    print(f"Connecté en tant que {bot.user}")
+    for guild in bot.guilds:
+        bump_channel = discord.utils.get(guild.text_channels, name=BUMP_CHANNEL_NAME)
+        if bump_channel:
+            await check_previous_bump(bump_channel)
+
+# === Vérification de l'historique des messages ===
+async def check_previous_bump(channel):
+    async for message in channel.history(limit=50):  # Parcourir les 50 derniers messages
+        if (
+            message.author.bot
+            and message.author.id == DISBOARD_BOT_ID
+            and "Bump effectué !" in message.content
+        ):
+            last_bump_time = message.created_at
+            now = datetime.utcnow()
+            time_elapsed = now - last_bump_time
+            time_remaining = max(BUMP_DELAY - time_elapsed, timedelta(0))
+
+            if time_remaining > timedelta(0):
+                # Activer le mode lent et démarrer le chrono si nécessaire
+                await channel.edit(slowmode_delay=int(BUMP_DELAY.total_seconds()))
+                await start_timer(channel, time_remaining)
+            break
+
 # === Événement : Quand un message est envoyé ===
 @bot.event
 async def on_message(message):
@@ -59,7 +87,11 @@ async def handle_bump(channel, message):
     await channel.edit(slowmode_delay=int(BUMP_DELAY.total_seconds()))
 
     # Mettre à jour le sujet du salon avec un chrono
-    end_time = now + BUMP_DELAY
+    await start_timer(channel, BUMP_DELAY)
+
+# === Démarrage du chrono ===
+async def start_timer(channel, duration):
+    end_time = datetime.utcnow() + duration
     while datetime.utcnow() < end_time:
         remaining_time = end_time - datetime.utcnow()
         await channel.edit(topic=f"⏳ Prochain bump possible dans {format_time(remaining_time)}")
