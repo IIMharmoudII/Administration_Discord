@@ -43,51 +43,39 @@ load_bump_data()
 async def on_message(message):
     # Ignore les messages envoyés par le bot
     if message.author.bot:
-        return
+        # Détecter si le bot Disboard a répondu
+        if message.author.id == 302050872383242240 and "Bump effectué !" in message.content:
+            bump_channel = discord.utils.get(message.guild.text_channels, name=BUMP_CHANNEL_NAME)
 
-    # Gère la commande /bump
-    if message.content == "/bump":
-        bump_channel = discord.utils.get(message.guild.text_channels, name=BUMP_CHANNEL_NAME)
+            if message.channel != bump_channel:
+                return
 
-        # Si le message est envoyé dans le mauvais salon
-        if message.channel != bump_channel:
-            await message.delete()
-            await message.author.send(f"📢 Vous ne pouvez bump que dans le salon {bump_channel.mention} !")
-            return
+            global last_bump_time
+            now = datetime.utcnow()
 
-        global last_bump_time
-        now = datetime.utcnow()
+            # Mettre à jour l'heure du dernier bump
+            last_bump_time = now
 
-        # Vérifie si le bump est encore en délai
-        if last_bump_time and now - last_bump_time < BUMP_DELAY:
-            remaining_time = BUMP_DELAY - (now - last_bump_time)
-            minutes, seconds = divmod(remaining_time.seconds, 60)
-            await message.channel.send(
-                f"⏳ {message.author.mention}, vous devez attendre encore {minutes} minutes et {seconds} secondes avant de bump 😅 !"
+            # Mettre à jour les données de bump pour la personne ayant bump
+            author_id = message.mentions[0].id if message.mentions else None
+            if author_id and str(author_id) in bump_data:
+                bump_data[str(author_id)]["count"] += 1
+            elif author_id:
+                bump_data[str(author_id)] = {"count": 1}
+
+            # Sauvegarder les données
+            save_bump_data()
+
+            # Remercier l'utilisateur et démarrer le compte à rebours
+            bump_count = bump_data[str(author_id)]["count"] if author_id else 0
+            await bump_channel.send(
+                f"Merci <@{author_id}> d'avoir bump le serveur ! 🙏\n"
+                f"Vous avez maintenant bump {bump_count} fois. 🏆"
             )
+
+            # Bloquer le salon et afficher le compte à rebours
+            countdown.start(bump_channel)
             return
-
-        # Mettre à jour l'heure du dernier bump
-        last_bump_time = now
-
-        # Mettre à jour les données de bump
-        if str(message.author.id) in bump_data:
-            bump_data[str(message.author.id)]["count"] += 1
-        else:
-            bump_data[str(message.author.id)] = {"count": 1}
-
-        # Sauvegarder les données
-        save_bump_data()
-
-        # Remercier l'utilisateur pour le bump et démarrer le compte à rebours
-        bump_count = bump_data[str(message.author.id)]["count"]
-        await message.channel.send(
-            f"Merci {message.author.mention} d'avoir bump le serveur ! 🙏\n"
-            f"Vous avez maintenant bump {bump_count} fois. 🏆"
-        )
-
-        # Bloquer le salon et afficher le compte à rebours
-        countdown.start(message.channel)
 
     # Autoriser le bot à continuer de traiter d'autres commandes
     await bot.process_commands(message)
@@ -97,6 +85,8 @@ async def on_message(message):
 async def countdown(channel):
     remaining_time = BUMP_DELAY - timedelta(seconds=countdown.current_loop)
     minutes, seconds = divmod(remaining_time.seconds, 60)
+
+    # Modifier le sujet du salon avec le temps restant
     await channel.edit(topic=f"⏳ Prochain bump possible dans {minutes} minutes et {seconds} secondes !")
 
     if countdown.current_loop == countdown.max_loops - 1:
