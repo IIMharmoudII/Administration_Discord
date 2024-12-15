@@ -41,9 +41,14 @@ load_bump_data()
 # === Événement : Quand un message est envoyé ===
 @bot.event
 async def on_message(message):
-    # Vérifie si le message est dans le bon salon
     bump_channel = discord.utils.get(message.guild.text_channels, name=BUMP_CHANNEL_NAME)
 
+    # Vérifier si le salon bump existe
+    if not bump_channel:
+        print(f"Erreur : Salon '{BUMP_CHANNEL_NAME}' introuvable.")
+        return
+
+    # Empêcher l'utilisation de `/bump` en dehors du salon désigné
     if message.channel != bump_channel and "/bump" in message.content.lower():
         await message.delete()
         await message.channel.send(
@@ -52,7 +57,7 @@ async def on_message(message):
         )
         return
 
-    # Détecter le message du bot Disboard confirmant le bump
+    # Détecter le message de Disboard confirmant le bump
     if message.author.bot and message.author.id == 302050872383242240 and "Bump effectué !" in message.content:
         global last_bump_time
         now = datetime.utcnow()
