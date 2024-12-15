@@ -21,6 +21,7 @@ BUMP_DATA_FILE = "bump_data.json"  # Nom du fichier pour sauvegarder les donnée
 bump_data = {}  # Stocke les informations de bump pour chaque utilisateur
 last_bump_time = None  # Heure du dernier bump dans le salon
 BUMP_DELAY = timedelta(hours=2)  # Délai entre deux bumps (2 heures)
+lock_channel_with_countdown_task = None  # Référence à la tâche en cours
 
 # === Fonctions de sauvegarde et chargement ===
 def load_bump_data():
@@ -41,10 +42,11 @@ load_bump_data()
 # === Événement : Quand un message est envoyé ===
 @bot.event
 async def on_message(message):
-    # Vérifie si le message est dans le bon salon
+    global last_bump_time
     bump_channel = discord.utils.get(message.guild.text_channels, name=BUMP_CHANNEL_NAME)
 
-    if message.channel != bump_channel and "/bump" in message.content.lower():
+    # Vérifie si le message contient "/bump" hors du salon désigné
+    if "/bump" in message.content.lower() and message.channel != bump_channel:
         await message.delete()
         if bump_channel:
             await message.channel.send(
@@ -53,12 +55,11 @@ async def on_message(message):
             )
         return
 
-    # Détecter le message du bot Disboard confirmant le bump
+    # Détecter le message de confirmation du bot Disboard
     if message.author.bot and message.author.id == 302050872383242240 and "Bump effectué !" in message.content:
-        global last_bump_time
         now = datetime.utcnow()
-
         last_bump_time = now
+
         author_id = message.mentions[0].id if message.mentions else None
 
         if author_id and str(author_id) in bump_data:
@@ -74,33 +75,40 @@ async def on_message(message):
             f"Vous avez maintenant bump {bump_count} fois. 🏆"
         )
 
-        lock_channel_with_countdown.start(bump_channel)
+        # Démarrer le verrouillage avec chrono
+        start_lockdown(bump_channel)
         return
 
     await bot.process_commands(message)
 
-# === Tâche pour verrouiller et déverrouiller le salon avec un chrono ===
-@tasks.loop(seconds=1)
+# === Verrouiller le salon avec un chrono ===
+async def start_lockdown(channel):
+    global lock_channel_with_countdown_task
+
+    if lock_channel_with_countdown_task:
+        lock_channel_with_countdown_task.cancel()
+
+    overwrite = channel.overwrites_for(channel.guild.default_role)
+    overwrite.send_messages = False
+    await channel.set_permissions(channel.guild.default_role, overwrite=overwrite)
+
+    lock_channel_with_countdown_task = bot.loop.create_task(lock_channel_with_countdown(channel))
+
 async def lock_channel_with_countdown(channel):
-    remaining_time = BUMP_DELAY - timedelta(seconds=lock_channel_with_countdown.current_loop)
-    minutes, seconds = divmod(remaining_time.seconds, 60)
+    end_time = datetime.utcnow() + BUMP_DELAY
 
-    if lock_channel_with_countdown.current_loop == 0:
-        # Verrouiller le salon
-        overwrite = channel.overwrites_for(channel.guild.default_role)
-        overwrite.send_messages = False
-        await channel.set_permissions(channel.guild.default_role, overwrite=overwrite)
-
-    if remaining_time > timedelta(0):
+    while datetime.utcnow() < end_time:
+        remaining_time = end_time - datetime.utcnow()
+        minutes, seconds = divmod(int(remaining_time.total_seconds()), 60)
         await channel.edit(topic=f"⏳ Prochain bump possible dans {minutes} minutes et {seconds} secondes !")
-    else:
-        # Déverrouiller le salon
-        overwrite = channel.overwrites_for(channel.guild.default_role)
-        overwrite.send_messages = True
-        await channel.set_permissions(channel.guild.default_role, overwrite=overwrite)
-        await channel.edit(topic="✅ Le serveur peut être bump à nouveau !")
-        await channel.send(f"<@&ROLE_ID_BUMP> 🎉 Vous pouvez à nouveau bump le serveur ! Utilisez `/bump` maintenant !")
-        lock_channel_with_countdown.stop()
+        await discord.utils.sleep_until(datetime.utcnow() + timedelta(seconds=1))
+
+    # Déverrouiller le salon
+    overwrite = channel.overwrites_for(channel.guild.default_role)
+    overwrite.send_messages = True
+    await channel.set_permissions(channel.guild.default_role, overwrite=overwrite)
+    await channel.edit(topic="✅ Le serveur peut être bump à nouveau !")
+    await channel.send(f"<@&ROLE_ID_BUMP> 🎉 Vous pouvez à nouveau bump le serveur ! Utilisez `/bump` maintenant !")
 
 # === Commande : ?bump ===
 @bot.command()
