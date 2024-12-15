@@ -22,6 +22,7 @@ bump_data = {}  # Stocke les informations de bump pour chaque utilisateur
 last_bump_time = None  # Heure du dernier bump dans le salon
 BUMP_DELAY = timedelta(hours=2)  # Délai entre deux bumps (2 heures)
 lock_channel_with_countdown_task = None  # Référence à la tâche en cours
+BUMP_ROLE_ID = 1314722162589831198  # ID du rôle à mentionner
 
 # === Fonctions de sauvegarde et chargement ===
 def load_bump_data():
@@ -76,7 +77,7 @@ async def on_message(message):
         )
 
         # Démarrer le verrouillage avec chrono
-        start_lockdown(bump_channel)
+        await start_lockdown(bump_channel)
         return
 
     await bot.process_commands(message)
@@ -99,8 +100,9 @@ async def lock_channel_with_countdown(channel):
 
     while datetime.utcnow() < end_time:
         remaining_time = end_time - datetime.utcnow()
-        minutes, seconds = divmod(int(remaining_time.total_seconds()), 60)
-        await channel.edit(topic=f"⏳ Prochain bump possible dans {minutes} minutes et {seconds} secondes !")
+        hours, remainder = divmod(int(remaining_time.total_seconds()), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        await channel.edit(topic=f"⏳ Prochain bump possible dans {hours:02}:{minutes:02}:{seconds:02} !")
         await discord.utils.sleep_until(datetime.utcnow() + timedelta(seconds=1))
 
     # Déverrouiller le salon
@@ -108,7 +110,7 @@ async def lock_channel_with_countdown(channel):
     overwrite.send_messages = True
     await channel.set_permissions(channel.guild.default_role, overwrite=overwrite)
     await channel.edit(topic="✅ Le serveur peut être bump à nouveau !")
-    await channel.send(f"<@&ROLE_ID_BUMP> 🎉 Vous pouvez à nouveau bump le serveur ! Utilisez `/bump` maintenant !")
+    await channel.send(f"<@&{BUMP_ROLE_ID}> 🎉 C'est le moment de bump le serveur !")
 
 # === Commande : ?bump ===
 @bot.command()
