@@ -1,8 +1,15 @@
+# -*- coding: utf-8 -*-
+
 import discord
-from discord.ext import commands
-from datetime import datetime, timedelta
+from discord.ext import commands, tasks
+import random
 import os
 from dotenv import load_dotenv
+from flask import Flask
+from threading import Thread
+from aiohttp import web
+import psutil
+import traceback
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -10,103 +17,92 @@ TOKEN = os.getenv('TOKEN_BOT_DISCORD')
 
 # Configurer les intents
 intents = discord.Intents.default()
+intents.messages = True
 intents.message_content = True
+intents.guilds = True
 
-bot = commands.Bot(command_prefix="?", intents=intents, help_command=None)
+# Initialisation du bot avec commands.Bot
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Variables globales
-BUMP_CHANNEL_NAME = "💖・bump"  # Nom exact du salon pour les bumps
-BUMP_DELAY = timedelta(hours=2)  # Délai entre deux bumps (2 heures)
-BUMP_ROLE_ID = 1314722162589831198  # ID du rôle à mentionner
-DISBOARD_BOT_ID = 302050872383242240  # ID de Disboard
+# === Smash or Pass ===
+TARGET_CHANNEL_ID = 1312570416665071797
+VALID_REACTIONS = ["👍", "👎"]
+message_threads = {}
 
-# === Événement : Quand le bot est prêt ===
+# === Serveur Web (Flask) ===
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Le bot est en ligne !"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# === Gestion des événements du bot ===
+
 @bot.event
 async def on_ready():
-    print(f"Connecté en tant que {bot.user}")
-    for guild in bot.guilds:
-        bump_channel = discord.utils.get(guild.text_channels, name=BUMP_CHANNEL_NAME)
-        if bump_channel:
-            await check_previous_bump(bump_channel)
+    print(f"Bot Smash or Pass connecté en tant que {bot.user}")
+    monitor_resources.start()  # Lancer la surveillance des ressources
+    keep_alive_task.start()  # Lancer la tâche de maintien de connexion
 
-# === Vérification de l'historique des messages ===
-async def check_previous_bump(channel):
-    async for message in channel.history(limit=50):  # Parcourir les 50 derniers messages
-        if (
-            message.author.bot
-            and message.author.id == DISBOARD_BOT_ID
-            and "Bump effectué !" in message.content
-        ):
-            last_bump_time = message.created_at
-            now = datetime.utcnow()
-            time_elapsed = now - last_bump_time
-            time_remaining = max(BUMP_DELAY - time_elapsed, timedelta(0))
-
-            if time_remaining > timedelta(0):
-                # Activer le mode lent et démarrer le chrono si nécessaire
-                await channel.edit(slowmode_delay=int(BUMP_DELAY.total_seconds()))
-                await start_timer(channel, time_remaining)
-            break
-
-# === Événement : Quand un message est envoyé ===
 @bot.event
 async def on_message(message):
-    if message.guild is None:  # Ignorer les messages privés
+    """Gestion des messages pour le Smash or Pass."""
+    if message.author.bot:
         return
 
-    bump_channel = discord.utils.get(message.guild.text_channels, name=BUMP_CHANNEL_NAME)
+    if message.channel.id == TARGET_CHANNEL_ID:
+        if not message.attachments:
+            await message.delete()
+            return
 
-    # Vérifie si le message provient de Disboard dans le salon de bump
-    if (
-        message.channel == bump_channel
-        and message.author.bot
-        and message.author.id == DISBOARD_BOT_ID
-        and "Bump effectué !" in message.content
-    ):
-        await handle_bump(bump_channel, message)
-        return
+        for reaction in VALID_REACTIONS:
+            await message.add_reaction(reaction)
 
-    await bot.process_commands(message)
+        thread_name = f"Fil de {message.author.display_name}"
+        thread = await message.create_thread(name=thread_name)
+        message_threads[message.id] = thread.id
 
-# === Gestion du bump ===
-async def handle_bump(channel, message):
-    # Vérifie l'heure exacte du dernier bump
-    last_bump_time = message.created_at  # Heure du message de Disboard
-    now = datetime.utcnow()
+        await thread.send(
+            f"Bienvenue dans le fil de discussion pour l'image postée par {message.author.mention}.\n"
+            f"Merci de respecter la personne et de rester courtois. Tout propos méprisant, dévalorisant, insultant ou méchant est interdit et sera sanctionné !"
+        )
 
-    # Calcule le temps restant pour le prochain bump possible
-    time_elapsed = now - last_bump_time
-    time_remaining = max(BUMP_DELAY - time_elapsed, timedelta(0))
+    await bot.process_commands(message)  # Processus des commandes ajouté ici
 
-    if time_remaining > timedelta(0):
-        # Si un chrono est déjà actif, ne rien faire
-        await channel.edit(topic=f"⏳ Prochain bump possible dans {format_time(time_remaining)}")
-        return
+@bot.event
+async def on_error(event, *args, **kwargs):
+    """Capturer les erreurs et les journaliser."""
+    with open("bot_errors.log", "a") as f:
+        f.write(f"Une erreur est survenue dans l'événement {event} :\n")
+        f.write(traceback.format_exc())
 
-    # Activer le mode lent pour 2 heures
-    await channel.edit(slowmode_delay=int(BUMP_DELAY.total_seconds()))
+# === Commandes du bot ===
+@bot.command()
+async def ping(ctx):
+    """Commande simple pour tester le bot."""
+    await ctx.send("Pong!")
 
-    # Mettre à jour le sujet du salon avec un chrono
-    await start_timer(channel, BUMP_DELAY)
+# === Surveiller les ressources ===
+@tasks.loop(seconds=30)
+async def monitor_resources():
+    """Surveiller la consommation des ressources."""
+    process = psutil.Process()
+    print(f"Mémoire utilisée : {process.memory_info().rss / 1024 ** 2:.2f} MB")
+    print(f"CPU utilisé : {process.cpu_percent()}%")
 
-# === Démarrage du chrono ===
-async def start_timer(channel, duration):
-    end_time = datetime.utcnow() + duration
-    while datetime.utcnow() < end_time:
-        remaining_time = end_time - datetime.utcnow()
-        await channel.edit(topic=f"⏳ Prochain bump possible dans {format_time(remaining_time)}")
-        await discord.utils.sleep_until(datetime.utcnow() + timedelta(seconds=1))
+# === Tâche de maintien de connexion ===
+@tasks.loop(seconds=60)
+async def keep_alive_task():
+    """Tâche pour maintenir la connexion avec Discord."""
+    print("Le bot est toujours en ligne.")
 
-    # Désactiver le mode lent et notifier les utilisateurs
-    await channel.edit(slowmode_delay=0, topic="✅ Le serveur peut être bump à nouveau !")
-    await channel.send(f"<@&{BUMP_ROLE_ID}> 🎉 C'est le moment de bump le serveur !")
-
-# === Utilitaire : Formatage du temps ===
-def format_time(duration):
-    total_seconds = int(duration.total_seconds())
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return f"{hours:02}:{minutes:02}:{seconds:02}"
-
-# Lancer le bot
+# === Lancer le bot ===
+keep_alive()
 bot.run(TOKEN)
