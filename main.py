@@ -6,9 +6,9 @@ import threading
 
 # Configuration de base du bot
 intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="+", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ID des rôles et catégories (votre configuration actuelle)
+# ID des rôles et catégories
 ROLE_IDS = {
     "perm1": 1312432497975627816,
     "perm2": 1312432497027711036,
