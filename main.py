@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from discord.ui import Modal, TextInput, View
+from discord.ui import Modal, TextInput
 
 # Configuration de base du bot
 intents = discord.Intents.all()
@@ -45,6 +45,7 @@ class MuteModal(Modal):
         self.max_time = max_time
         self.member = member
 
+        # Champs pour la durée et la raison
         self.duration_input = TextInput(
             label="Durée du mute (en minutes)",
             placeholder=f"Max : {max_time} minutes",
@@ -60,6 +61,7 @@ class MuteModal(Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            # Valider la durée saisie
             duration = int(self.duration_input.value)
             if duration > self.max_time:
                 await interaction.response.send_message(
@@ -68,11 +70,11 @@ class MuteModal(Modal):
                 )
                 return
 
+            # Appliquer le mute avec raison
             reason = self.reason_input.value
-            await self.member.timeout_for(
-                discord.utils.utcnow() + discord.timedelta(minutes=duration),
-                reason=reason
-            )
+            timeout_duration = discord.utils.utcnow() + discord.timedelta(minutes=duration)
+            await self.member.timeout(timeout_duration, reason=reason)
+
             await interaction.response.send_message(
                 f"{self.member.mention} a été mute pour {duration} minutes. Raison : {reason}"
             )
@@ -89,40 +91,10 @@ async def mutevocal(ctx, member: discord.Member):
     for role, max_time in MUTE_LIMITS.items():
         if ROLE_IDS[role] in user_roles:
             modal = MuteModal(max_time, member)
-            await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour muter {member.mention}.")
-            await ctx.send_modal(modal)
+            await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour muter {member.mention}.", ephemeral=True)
+            await ctx.interaction.response.send_modal(modal)
             return
     await ctx.send("Vous n'avez pas la permission de mute.")
-
-# Commande pour rankup
-@bot.command()
-async def rankup(ctx, member: discord.Member):
-    user_roles = [role.id for role in ctx.author.roles]
-    member_roles = [role.id for role in member.roles]
-    for role in ROLE_IDS.keys():
-        if ROLE_IDS[role] in user_roles:
-            next_role_id = get_next_role(role)
-            if next_role_id and next_role_id not in member_roles:
-                role_to_add = ctx.guild.get_role(next_role_id)
-                await member.add_roles(role_to_add)
-                await ctx.send(f"{member.mention} a été promu au rôle {role_to_add.name}.")
-                return
-    await ctx.send("Impossible de promouvoir cet utilisateur.")
-
-# Commande pour derank
-@bot.command()
-async def derank(ctx, member: discord.Member):
-    user_roles = [role.id for role in ctx.author.roles]
-    member_roles = [role.id for role in member.roles]
-    for role in ROLE_IDS.keys():
-        if ROLE_IDS[role] in user_roles:
-            previous_role_id = get_previous_role(role)
-            if previous_role_id and previous_role_id in member_roles:
-                role_to_remove = ctx.guild.get_role(previous_role_id)
-                await member.remove_roles(role_to_remove)
-                await ctx.send(f"{member.mention} a été rétrogradé et a perdu le rôle {role_to_remove.name}.")
-                return
-    await ctx.send("Impossible de rétrograder cet utilisateur.")
 
 # Fonction pour récupérer le rôle suivant
 def get_next_role(current_role):
@@ -141,13 +113,6 @@ def get_previous_role(current_role):
         return ROLE_IDS[roles[current_index - 1]] if current_index > 0 else None
     except ValueError:
         return None
-
-# Commande pour avertissement
-@bot.command()
-async def avert(ctx, member: discord.Member):
-    modal = MuteModal(max_time=0, member=member)  # Pas de durée limite pour avert
-    await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour avertir {member.mention}.")
-    await ctx.send_modal(modal)
 
 # Démarrage du bot
 bot.run("YOUR_DISCORD_BOT_TOKEN")
