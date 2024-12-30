@@ -1,8 +1,6 @@
 import discord
 from discord.ext import commands
 from discord.ui import Modal, TextInput
-from flask import Flask
-import threading
 
 # Configuration de base du bot
 intents = discord.Intents.all()
@@ -152,23 +150,10 @@ async def avert(ctx, member: discord.Member):
     await ctx.send(f"{ctx.author.mention}, remplissez les informations pour avertir {member.mention}.")
     await ctx.interaction.response.send_modal(modal)
 
-# Configuration Flask
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return 'Le bot Discord fonctionne !'
-
-# Lancer Flask dans un thread séparé
-def run_flask():
-    app.run(host="0.0.0.0", port=5000)
-
 # Fonction pour démarrer le bot
 def start_bot():
     bot.run("YOUR_DISCORD_BOT_TOKEN")
 
-# Lancer Flask et le bot Discord simultanément
+# Lancer le bot Discord
 if __name__ == "__main__":
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.start()
     start_bot()
