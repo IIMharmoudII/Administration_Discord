@@ -207,8 +207,35 @@ async def rankup(ctx, member: discord.Member, reason: str = None):
         await ctx.send(f"Tu n'as pas la permission de rankup {member.mention} car il a un rôle supérieur ou égal au tien.")
         return
 
-    # Code pour rankup (non modifié)
-    # ...
+    # Code pour rankup
+    highest_role = max(member.roles, key=lambda role: ROLE_IDS.get(role.id, 0))
+    next_role_id = get_next_role(highest_role.id)
+    if next_role_id:
+        next_role = ctx.guild.get_role(next_role_id)
+        await member.add_roles(next_role)
+        await ctx.send(f"{member.mention} a été promu à {next_role.name}. Raison : {reason}")
+    else:
+        await ctx.send(f"{member.mention} ne peut pas être promu davantage.")
+
+# Commande pour derank
+@bot.command()
+async def derank(ctx, member: discord.Member, reason: str = None):
+    if not reason:
+        await ctx.send("Tu dois spécifier une raison à la suite de la commande.\nExemple : `+derank @Merguez pour comportement inapproprié`")
+        return
+
+    if not has_permission(ctx, member):
+        await ctx.send(f"Tu n'as pas la permission de derank {member.mention} car il a un rôle supérieur ou égal au tien.")
+        return
+
+    highest_role = max(member.roles, key=lambda role: ROLE_IDS.get(role.id, 0))
+    previous_role_id = get_previous_role(highest_role.id)
+    if previous_role_id:
+        previous_role = ctx.guild.get_role(previous_role_id)
+        await member.remove_roles(previous_role)
+        await ctx.send(f"{member.mention} a été rétrogradé à {previous_role.name}. Raison : {reason}")
+    else:
+        await ctx.send(f"{member.mention} ne peut pas être rétrogradé davantage.")
 
 # Lancer le bot
 bot.run(TOKEN)
