@@ -72,15 +72,15 @@ MUTE_LIMITS = {
 def has_permission(ctx, target_member):
     user_roles = [role.id for role in ctx.author.roles]
     target_roles = [role.id for role in target_member.roles]
-
-    # Comparer les rôles de l'utilisateur avec ceux de la personne ciblée
-    for role in sorted(ROLE_IDS.values(), reverse=True):
-        if role in user_roles:
-            # Si l'utilisateur n'a pas de rôle supérieur ou égal à la cible, il n'a pas la permission
-            if role not in target_roles:
-                return False
-            else:
+    
+    # On vérifie si l'utilisateur a un rôle plus élevé dans la hiérarchie que la cible
+    for role_id in sorted(ROLE_IDS.values(), reverse=True):
+        if role_id in user_roles:
+            # L'utilisateur doit avoir un rôle plus élevé que la cible
+            if any(role.id in target_roles for role in ctx.guild.roles):
                 return True
+            else:
+                return False
     return False
 
 # Classe pour le modal de mute
@@ -141,42 +141,6 @@ class MuteModal(Modal):
                 ephemeral=True
             )
 
-# Commande pour mutechat
-@bot.command()
-async def mutechat(ctx, member: discord.Member, time: str = None, reason: str = None):
-    if not time or not reason:
-        await ctx.send("Tu dois spécifier la durée et la raison à la suite de la commande.\nExemple : `+mutechat @Merguez 20m troll`")
-        return
-
-    if not has_permission(ctx, member):
-        await ctx.send(f"Tu n'as pas la permission de mute {member.mention} car il a un rôle supérieur ou égal au tien.")
-        return
-
-    user_roles = [role.id for role in ctx.author.roles]
-    for role, max_time in MUTE_LIMITS.items():
-        if ROLE_IDS[role] in user_roles:
-            if time.endswith('m'):
-                minutes = int(time[:-1])  # Extraction des minutes
-                if minutes > max_time:
-                    await ctx.send(f"Tu peux mute une personne pendant un maximum de {max_time} minutes.")
-                    return
-                await member.add_roles(ctx.guild.get_role(ROLE_IDS['mutechat']))  # Ajouter rôle mutechat
-                await ctx.send(f"{member.mention} a été mutechat pour {minutes} minutes. Raison : {reason}")
-                return
-            elif time.endswith('h'):
-                hours = int(time[:-1])  # Extraction des heures
-                minutes = hours * 60
-                if minutes > max_time:
-                    await ctx.send(f"Tu peux mute une personne pendant un maximum de {max_time} minutes.")
-                    return
-                await member.add_roles(ctx.guild.get_role(ROLE_IDS['mutechat']))  # Ajouter rôle mutechat
-                await ctx.send(f"{member.mention} a été mutechat pour {minutes} minutes. Raison : {reason}")
-                return
-            else:
-                await ctx.send("Le format du temps est invalide. Utilisez 'm' pour minutes et 'h' pour heures.")
-                return
-    await ctx.send("Tu n'as pas les permissions nécessaires pour mute cette personne.")
-
 # Commande pour mutevocal
 @bot.command()
 async def mutevocal(ctx, member: discord.Member, time: str = None, reason: str = None):
@@ -196,11 +160,9 @@ async def mutevocal(ctx, member: discord.Member, time: str = None, reason: str =
                 if minutes > max_time:
                     await ctx.send(f"Tu peux mute une personne pendant un maximum de {max_time} minutes.")
                     return
-                await member.timeout(
-                    discord.utils.utcnow() + discord.timedelta(minutes=minutes),
-                    reason=reason
-                )
-                await ctx.send(f"{member.mention} a été mute vocal pour {minutes} minutes. Raison : {reason}")
+                modal = MuteModal(max_time, member, "Mute")
+                await ctx.send(f"{ctx.author.mention}, remplissez les informations pour mute {member.mention}.")
+                await ctx.send_modal(modal)  # Envoi du modal
                 return
             elif time.endswith('h'):
                 hours = int(time[:-1])  # Extraction des heures
@@ -208,11 +170,9 @@ async def mutevocal(ctx, member: discord.Member, time: str = None, reason: str =
                 if minutes > max_time:
                     await ctx.send(f"Tu peux mute une personne pendant un maximum de {max_time} minutes.")
                     return
-                await member.timeout(
-                    discord.utils.utcnow() + discord.timedelta(minutes=minutes),
-                    reason=reason
-                )
-                await ctx.send(f"{member.mention} a été mute vocal pour {minutes} minutes. Raison : {reason}")
+                modal = MuteModal(max_time, member, "Mute")
+                await ctx.send(f"{ctx.author.mention}, remplissez les informations pour mute {member.mention}.")
+                await ctx.send_modal(modal)  # Envoi du modal
                 return
             else:
                 await ctx.send("Le format du temps est invalide. Utilisez 'm' pour minutes et 'h' pour heures.")
@@ -236,5 +196,63 @@ async def avert(ctx, member: discord.Member, reason: str = None):
     )
     await ctx.send(f"Avertissement envoyé à {member.mention} avec la raison : {reason}.")
 
-# Lancer le bot
+# Commande pour rankup
+@bot.command()
+async def rankup(ctx, member: discord.Member, reason: str = None):
+    if not reason:
+        await ctx.send("Tu dois spécifier une raison à la suite de la commande.\nExemple : `+rankup @Merguez pour bon comportement`")
+        return
+
+    if not has_permission(ctx, member):
+        await ctx.send(f"Tu n'as pas la permission de rankup {member.mention} car il a un rôle supérieur ou égal au tien.")
+        return
+
+    # Suppression de l'ancien rôle et ajout du nouveau
+    current_role = max(member.roles, key=lambda r: r.position)
+    new_role = discord.utils.get(ctx.guild.roles, id=ROLE_IDS["perm5"])  # Exemple pour ajouter perm5
+
+    if current_role != new_role:
+        await member.remove_roles(current_role)
+        await member.add_roles(new_role)
+        await ctx.send(f"{member.mention} a été promu à {new_role.name}.")
+    else:
+        await ctx.send(f"{member.mention} a déjà le rôle {new_role.name}.")
+
+# Commande pour afficher l'aide
+@bot.command()
+async def help(ctx):
+    embed = discord.Embed(
+        title="Aide des commandes",
+        description="Voici une liste des commandes disponibles sur le serveur.",
+        color=discord.Color.blue()
+    )
+    
+    embed.add_field(
+        name="**+mutechat @user [temps] [raison]**",
+        value="Mute l'utilisateur dans le chat pour un temps donné.",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="**+mutevocal @user [temps] [raison]**",
+        value="Mute l'utilisateur dans le vocal pour un temps donné.",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="**+avert @user [raison]**",
+        value="Avertit un utilisateur pour une raison donnée.",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="**+rankup @user [raison]**",
+        value="Augmente le rôle de l'utilisateur.",
+        inline=False
+    )
+    
+    await ctx.send(embed=embed)
+
+# Lancer le bot et garder le serveur en ligne
+keep_alive()
 bot.run(TOKEN)
