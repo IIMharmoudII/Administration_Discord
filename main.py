@@ -141,6 +141,42 @@ class MuteModal(Modal):
                 ephemeral=True
             )
 
+# Commande pour mutechat
+@bot.command()
+async def mutechat(ctx, member: discord.Member, time: str = None, reason: str = None):
+    if not time or not reason:
+        await ctx.send("Tu dois spécifier la durée et la raison à la suite de la commande.\nExemple : `+mutechat @Merguez 20m troll`")
+        return
+
+    if not has_permission(ctx, member):
+        await ctx.send(f"Tu n'as pas la permission de mute {member.mention} car il a un rôle supérieur ou égal au tien.")
+        return
+
+    user_roles = [role.id for role in ctx.author.roles]
+    for role, max_time in MUTE_LIMITS.items():
+        if ROLE_IDS[role] in user_roles:
+            if time.endswith('m'):
+                minutes = int(time[:-1])  # Extraction des minutes
+                if minutes > max_time:
+                    await ctx.send(f"Tu peux mute une personne pendant un maximum de {max_time} minutes.")
+                    return
+                await member.add_roles(ctx.guild.get_role(ROLE_IDS['mutechat']))  # Ajouter rôle mutechat
+                await ctx.send(f"{member.mention} a été mutechat pour {minutes} minutes. Raison : {reason}")
+                return
+            elif time.endswith('h'):
+                hours = int(time[:-1])  # Extraction des heures
+                minutes = hours * 60
+                if minutes > max_time:
+                    await ctx.send(f"Tu peux mute une personne pendant un maximum de {max_time} minutes.")
+                    return
+                await member.add_roles(ctx.guild.get_role(ROLE_IDS['mutechat']))  # Ajouter rôle mutechat
+                await ctx.send(f"{member.mention} a été mutechat pour {minutes} minutes. Raison : {reason}")
+                return
+            else:
+                await ctx.send("Le format du temps est invalide. Utilisez 'm' pour minutes et 'h' pour heures.")
+                return
+    await ctx.send("Tu n'as pas les permissions nécessaires pour mute cette personne.")
+
 # Commande pour mutevocal
 @bot.command()
 async def mutevocal(ctx, member: discord.Member, time: str = None, reason: str = None):
@@ -160,9 +196,11 @@ async def mutevocal(ctx, member: discord.Member, time: str = None, reason: str =
                 if minutes > max_time:
                     await ctx.send(f"Tu peux mute une personne pendant un maximum de {max_time} minutes.")
                     return
-                modal = MuteModal(max_time, member, "Mute")
-                await ctx.send(f"{ctx.author.mention}, remplissez les informations pour mute {member.mention}.")
-                await ctx.send_modal(modal)  # Envoi du modal
+                await member.timeout(
+                    discord.utils.utcnow() + discord.timedelta(minutes=minutes),
+                    reason=reason
+                )
+                await ctx.send(f"{member.mention} a été mute vocal pour {minutes} minutes. Raison : {reason}")
                 return
             elif time.endswith('h'):
                 hours = int(time[:-1])  # Extraction des heures
@@ -170,9 +208,11 @@ async def mutevocal(ctx, member: discord.Member, time: str = None, reason: str =
                 if minutes > max_time:
                     await ctx.send(f"Tu peux mute une personne pendant un maximum de {max_time} minutes.")
                     return
-                modal = MuteModal(max_time, member, "Mute")
-                await ctx.send(f"{ctx.author.mention}, remplissez les informations pour mute {member.mention}.")
-                await ctx.send_modal(modal)  # Envoi du modal
+                await member.timeout(
+                    discord.utils.utcnow() + discord.timedelta(minutes=minutes),
+                    reason=reason
+                )
+                await ctx.send(f"{member.mention} a été mute vocal pour {minutes} minutes. Raison : {reason}")
                 return
             else:
                 await ctx.send("Le format du temps est invalide. Utilisez 'm' pour minutes et 'h' pour heures.")
@@ -195,47 +235,6 @@ async def avert(ctx, member: discord.Member, reason: str = None):
         f"**Avertissement:** {ctx.author.mention} a averti {member.mention} pour : {reason}."
     )
     await ctx.send(f"Avertissement envoyé à {member.mention} avec la raison : {reason}.")
-
-# Commande pour rankup
-@bot.command()
-async def rankup(ctx, member: discord.Member, reason: str = None):
-    if not reason:
-        await ctx.send("Tu dois spécifier une raison à la suite de la commande.\nExemple : `+rankup @Merguez pour bon comportement`")
-        return
-
-    if not has_permission(ctx, member):
-        await ctx.send(f"Tu n'as pas la permission de rankup {member.mention} car il a un rôle supérieur ou égal au tien.")
-        return
-
-    # Code pour rankup
-    highest_role = max(member.roles, key=lambda role: ROLE_IDS.get(role.id, 0))
-    next_role_id = get_next_role(highest_role.id)
-    if next_role_id:
-        next_role = ctx.guild.get_role(next_role_id)
-        await member.add_roles(next_role)
-        await ctx.send(f"{member.mention} a été promu à {next_role.name}. Raison : {reason}")
-    else:
-        await ctx.send(f"{member.mention} ne peut pas être promu davantage.")
-
-# Commande pour derank
-@bot.command()
-async def derank(ctx, member: discord.Member, reason: str = None):
-    if not reason:
-        await ctx.send("Tu dois spécifier une raison à la suite de la commande.\nExemple : `+derank @Merguez pour comportement inapproprié`")
-        return
-
-    if not has_permission(ctx, member):
-        await ctx.send(f"Tu n'as pas la permission de derank {member.mention} car il a un rôle supérieur ou égal au tien.")
-        return
-
-    highest_role = max(member.roles, key=lambda role: ROLE_IDS.get(role.id, 0))
-    previous_role_id = get_previous_role(highest_role.id)
-    if previous_role_id:
-        previous_role = ctx.guild.get_role(previous_role_id)
-        await member.remove_roles(previous_role)
-        await ctx.send(f"{member.mention} a été rétrogradé à {previous_role.name}. Raison : {reason}")
-    else:
-        await ctx.send(f"{member.mention} ne peut pas être rétrogradé davantage.")
 
 # Lancer le bot
 bot.run(TOKEN)
