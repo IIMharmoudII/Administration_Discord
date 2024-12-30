@@ -1,108 +1,130 @@
-# -*- coding: utf-8 -*-
-
 import discord
-from discord.ext import commands, tasks
-import random
-import os
-from dotenv import load_dotenv
-from flask import Flask
-from threading import Thread
-from aiohttp import web
-import psutil
-import traceback
+from discord.ext import commands
+from discord.ui import Modal, InputText
 
-# Charger les variables d'environnement
-load_dotenv()
-TOKEN = os.getenv('TOKEN_BOT_DISCORD')
+# Configuration de base du bot
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix="+", intents=intents)
 
-# Configurer les intents
-intents = discord.Intents.default()
-intents.messages = True
-intents.message_content = True
-intents.guilds = True
+# ID des rôles et catégories
+ROLE_IDS = {
+    "perm1": 1312432497975627816,
+    "perm2": 1312432497027711036,
+    "perm3": 1312432496641703986,
+    "perm4": 1312432490392326305,
+    "perm5": 1312432489872097300,
+    "staff": 1312427749981552690,
+    "gs": 1312427747171369103,
+    "moderation": 1312427543843835914,
+    "gm": 1312426671152042055,
+    "owner": 1312432485472276490,
+    "co_owner": 1312432486604734494,
+    "logs": 1312414690172735508,
+    "staff_info": 1312414623802196071
+}
 
-# Initialisation du bot avec commands.Bot
-bot = commands.Bot(command_prefix="!", intents=intents)
+# Limites de temps pour les mutes par rôle
+MUTE_LIMITS = {
+    "perm1": 10,
+    "perm2": 15,
+    "perm3": 20,
+    "perm4": 25,
+    "perm5": 30,
+    "staff": 60,
+    "gs": 120,
+    "moderation": 240,
+    "gm": 480,
+    "co_owner": 50,
+    "owner": 60
+}
 
-# === Smash or Pass ===
-TARGET_CHANNEL_ID = 1312570416665071797
-VALID_REACTIONS = ["👍", "👎"]
-message_threads = {}
+class MuteModal(Modal):
+    def __init__(self, max_time, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.max_time = max_time
+        self.add_item(InputText(label="Durée du mute (en minutes)", placeholder=f"Max : {max_time} minutes"))
+        self.add_item(InputText(label="Raison du mute", placeholder="Indiquez la raison"))
 
-# === Serveur Web (Flask) ===
-app = Flask('')
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            duration = int(self.children[0].value)
+            if duration > self.max_time:
+                await interaction.response.send_message(f"Vous ne pouvez pas mute pour plus de {self.max_time} minutes.", ephemeral=True)
+                return
 
-@app.route('/')
-def home():
-    return "Le bot est en ligne !"
+            reason = self.children[1].value
+            user = interaction.message.mentions[0]
+            await interaction.guild.timeout(user, duration * 60, reason=reason)
+            await interaction.response.send_message(f"{user.mention} a été mute pour {duration} minutes. Raison : {reason}")
+        except ValueError:
+            await interaction.response.send_message("Veuillez entrer une durée valide.", ephemeral=True)
 
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# === Gestion des événements du bot ===
-
-@bot.event
-async def on_ready():
-    print(f"Bot Smash or Pass connecté en tant que {bot.user}")
-    monitor_resources.start()  # Lancer la surveillance des ressources
-    keep_alive_task.start()  # Lancer la tâche de maintien de connexion
-
-@bot.event
-async def on_message(message):
-    """Gestion des messages pour le Smash or Pass."""
-    if message.author.bot:
-        return
-
-    if message.channel.id == TARGET_CHANNEL_ID:
-        if not message.attachments:
-            await message.delete()
+# Commande pour mute
+@bot.command()
+async def mutevocal(ctx, member: discord.Member):
+    user_roles = [role.id for role in ctx.author.roles]
+    for role, max_time in MUTE_LIMITS.items():
+        if ROLE_IDS[role] in user_roles:
+            modal = MuteModal(max_time, title="Mute Vocal")
+            await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour muter {member.mention}.", view=modal)
             return
 
-        for reaction in VALID_REACTIONS:
-            await message.add_reaction(reaction)
+    await ctx.send("Vous n'avez pas la permission de mute.")
 
-        thread_name = f"Fil de {message.author.display_name}"
-        thread = await message.create_thread(name=thread_name)
-        message_threads[message.id] = thread.id
-
-        await thread.send(
-            f"Bienvenue dans le fil de discussion pour l'image postée par {message.author.mention}.\n"
-            f"Merci de respecter la personne et de rester courtois. Tout propos méprisant, dévalorisant, insultant ou méchant est interdit et sera sanctionné !"
-        )
-
-    await bot.process_commands(message)  # Processus des commandes ajouté ici
-
-@bot.event
-async def on_error(event, *args, **kwargs):
-    """Capturer les erreurs et les journaliser."""
-    with open("bot_errors.log", "a") as f:
-        f.write(f"Une erreur est survenue dans l'événement {event} :\n")
-        f.write(traceback.format_exc())
-
-# === Commandes du bot ===
 @bot.command()
-async def ping(ctx):
-    """Commande simple pour tester le bot."""
-    await ctx.send("Pong!")
+async def rankup(ctx, member: discord.Member):
+    user_roles = [role.id for role in ctx.author.roles]
+    member_roles = [role.id for role in member.roles]
 
-# === Surveiller les ressources ===
-@tasks.loop(seconds=30)
-async def monitor_resources():
-    """Surveiller la consommation des ressources."""
-    process = psutil.Process()
-    print(f"Mémoire utilisée : {process.memory_info().rss / 1024 ** 2:.2f} MB")
-    print(f"CPU utilisé : {process.cpu_percent()}%")
+    for role in ROLE_IDS.keys():
+        if ROLE_IDS[role] in user_roles:
+            next_role_id = get_next_role(role)
+            if next_role_id and next_role_id not in member_roles:
+                role_to_add = ctx.guild.get_role(next_role_id)
+                await member.add_roles(role_to_add)
+                await ctx.send(f"{member.mention} a été promu au rôle {role_to_add.name}.")
+                return
 
-# === Tâche de maintien de connexion ===
-@tasks.loop(seconds=60)
-async def keep_alive_task():
-    """Tâche pour maintenir la connexion avec Discord."""
-    print("Le bot est toujours en ligne.")
+    await ctx.send("Impossible de promouvoir cet utilisateur.")
 
-# === Lancer le bot ===
-keep_alive()
-bot.run(TOKEN)
+@bot.command()
+async def derank(ctx, member: discord.Member):
+    user_roles = [role.id for role in ctx.author.roles]
+    member_roles = [role.id for role in member.roles]
+
+    for role in ROLE_IDS.keys():
+        if ROLE_IDS[role] in user_roles:
+            previous_role_id = get_previous_role(role)
+            if previous_role_id and previous_role_id in member_roles:
+                role_to_remove = ctx.guild.get_role(previous_role_id)
+                await member.remove_roles(role_to_remove)
+                await ctx.send(f"{member.mention} a été rétrogradé et a perdu le rôle {role_to_remove.name}.")
+                return
+
+    await ctx.send("Impossible de rétrograder cet utilisateur.")
+
+# Fonction pour récupérer le rôle suivant
+def get_next_role(current_role):
+    roles = list(ROLE_IDS.keys())
+    try:
+        current_index = roles.index(current_role)
+        return ROLE_IDS[roles[current_index + 1]] if current_index + 1 < len(roles) else None
+    except ValueError:
+        return None
+
+# Fonction pour récupérer le rôle précédent
+def get_previous_role(current_role):
+    roles = list(ROLE_IDS.keys())
+    try:
+        current_index = roles.index(current_role)
+        return ROLE_IDS[roles[current_index - 1]] if current_index > 0 else None
+    except ValueError:
+        return None
+
+@bot.command()
+async def avert(ctx, member: discord.Member):
+    modal = MuteModal(max_time=0, title="Avertissement")  # Pas de durée limite pour avert
+    await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour avertir {member.mention}.", view=modal)
+
+# Démarrage du bot
+bot.run("YOUR_DISCORD_BOT_TOKEN")
