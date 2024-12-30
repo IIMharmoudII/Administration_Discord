@@ -1,11 +1,38 @@
 import discord
 from discord.ext import commands
-from discord.ui import Modal, TextInput
+import random
+import os
+from dotenv import load_dotenv
+from flask import Flask
+from threading import Thread
+from difflib import get_close_matches
 
-# Configuration de base du bot
-intents = discord.Intents.all()
+# Charger les variables d'environnement
+load_dotenv()
+TOKEN = os.getenv('YOUR_DISCORD_BOT_TOKEN')
+
+# Configurer les intents
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+
+# Initialisation du bot
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# === Serveur Web pour garder le bot actif ===
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Le bot est en ligne !"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+    
 # ID des rôles et catégories
 ROLE_IDS = {
     "perm1": 1312432497975627816,
@@ -152,7 +179,7 @@ async def avert(ctx, member: discord.Member):
 
 # Fonction pour démarrer le bot
 def start_bot():
-    bot.run("YOUR_DISCORD_BOT_TOKEN")
+    bot.run(TOKEN)
 
 # Lancer le bot Discord
 if __name__ == "__main__":
