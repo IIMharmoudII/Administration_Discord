@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from flask import Flask
 from threading import Thread
 from difflib import get_close_matches
+from discord.ui import Modal, TextInput
 
 # Charger les variables d'environnement
 load_dotenv()
