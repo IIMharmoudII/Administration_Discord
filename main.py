@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord.ui import Modal, TextInput
 # Configuration de base du bot
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="+", intents=intents)
