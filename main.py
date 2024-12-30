@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from discord.ui import Modal, InputText
+from discord.ui import Modal, TextInput
 
 # Configuration de base du bot
 intents = discord.Intents.all()
@@ -38,14 +38,15 @@ MUTE_LIMITS = {
     "owner": 60
 }
 
+# Classe pour le mute vocal
 class MuteModal(Modal):
     def __init__(self, max_time, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.max_time = max_time
-        self.add_item(InputText(label="Durée du mute (en minutes)", placeholder=f"Max : {max_time} minutes"))
-        self.add_item(InputText(label="Raison du mute", placeholder="Indiquez la raison"))
+        self.add_item(TextInput(label="Durée du mute (en minutes)", placeholder=f"Max : {max_time} minutes"))
+        self.add_item(TextInput(label="Raison du mute", placeholder="Indiquez la raison"))
 
-    async def callback(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction):
         try:
             duration = int(self.children[0].value)
             if duration > self.max_time:
@@ -59,7 +60,7 @@ class MuteModal(Modal):
         except ValueError:
             await interaction.response.send_message("Veuillez entrer une durée valide.", ephemeral=True)
 
-# Commande pour mute
+# Commande pour mute vocal
 @bot.command()
 async def mutevocal(ctx, member: discord.Member):
     user_roles = [role.id for role in ctx.author.roles]
@@ -68,14 +69,13 @@ async def mutevocal(ctx, member: discord.Member):
             modal = MuteModal(max_time, title="Mute Vocal")
             await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour muter {member.mention}.", view=modal)
             return
-
     await ctx.send("Vous n'avez pas la permission de mute.")
 
+# Commande pour rankup
 @bot.command()
 async def rankup(ctx, member: discord.Member):
     user_roles = [role.id for role in ctx.author.roles]
     member_roles = [role.id for role in member.roles]
-
     for role in ROLE_IDS.keys():
         if ROLE_IDS[role] in user_roles:
             next_role_id = get_next_role(role)
@@ -84,14 +84,13 @@ async def rankup(ctx, member: discord.Member):
                 await member.add_roles(role_to_add)
                 await ctx.send(f"{member.mention} a été promu au rôle {role_to_add.name}.")
                 return
-
     await ctx.send("Impossible de promouvoir cet utilisateur.")
 
+# Commande pour derank
 @bot.command()
 async def derank(ctx, member: discord.Member):
     user_roles = [role.id for role in ctx.author.roles]
     member_roles = [role.id for role in member.roles]
-
     for role in ROLE_IDS.keys():
         if ROLE_IDS[role] in user_roles:
             previous_role_id = get_previous_role(role)
@@ -100,7 +99,6 @@ async def derank(ctx, member: discord.Member):
                 await member.remove_roles(role_to_remove)
                 await ctx.send(f"{member.mention} a été rétrogradé et a perdu le rôle {role_to_remove.name}.")
                 return
-
     await ctx.send("Impossible de rétrograder cet utilisateur.")
 
 # Fonction pour récupérer le rôle suivant
@@ -121,6 +119,7 @@ def get_previous_role(current_role):
     except ValueError:
         return None
 
+# Commande pour avertissement
 @bot.command()
 async def avert(ctx, member: discord.Member):
     modal = MuteModal(max_time=0, title="Avertissement")  # Pas de durée limite pour avert
