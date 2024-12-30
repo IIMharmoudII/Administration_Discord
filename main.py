@@ -54,9 +54,14 @@ def is_higher_role(executor: discord.Member, target: discord.Member):
     executor_highest = min((ROLE_HIERARCHY.index(r) for r in executor_roles if r in ROLE_HIERARCHY), default=float('inf'))
     target_highest = min((ROLE_HIERARCHY.index(r) for r in target_roles if r in ROLE_HIERARCHY), default=float('inf'))
 
-    # Logs pour vérifier la hiérarchie
-    print(f"Executor roles: {executor_roles}, highest index: {executor_highest}")
-    print(f"Target roles: {target_roles}, highest index: {target_highest}")
+    # Logs pour déboguer
+    print(f"[DEBUG] Executor roles: {executor_roles}, highest index: {executor_highest}")
+    print(f"[DEBUG] Target roles: {target_roles}, highest index: {target_highest}")
+
+    if executor_highest == float('inf'):
+        print("[DEBUG] Executor has no roles in ROLE_HIERARCHY.")
+    if target_highest == float('inf'):
+        print("[DEBUG] Target has no roles in ROLE_HIERARCHY.")
 
     return executor_highest < target_highest
     
