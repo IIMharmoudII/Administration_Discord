@@ -40,25 +40,47 @@ MUTE_LIMITS = {
 
 # Classe pour le modal de mute
 class MuteModal(Modal):
-    def __init__(self, max_time, *args, **kwargs):
+    def __init__(self, max_time, member, *args, **kwargs):
         super().__init__(title="Mute Vocal", *args, **kwargs)
         self.max_time = max_time
-        self.add_item(TextInput(label="Durée du mute (en minutes)", placeholder=f"Max : {max_time} minutes"))
-        self.add_item(TextInput(label="Raison du mute", placeholder="Indiquez la raison"))
+        self.member = member
+
+        self.duration_input = TextInput(
+            label="Durée du mute (en minutes)",
+            placeholder=f"Max : {max_time} minutes",
+            required=True
+        )
+        self.reason_input = TextInput(
+            label="Raison du mute",
+            placeholder="Indiquez la raison",
+            required=True
+        )
+        self.add_item(self.duration_input)
+        self.add_item(self.reason_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            duration = int(self.children[0].value)
+            duration = int(self.duration_input.value)
             if duration > self.max_time:
-                await interaction.response.send_message(f"Vous ne pouvez pas mute pour plus de {self.max_time} minutes.", ephemeral=True)
+                await interaction.response.send_message(
+                    f"Vous ne pouvez pas mute pour plus de {self.max_time} minutes.",
+                    ephemeral=True
+                )
                 return
 
-            reason = self.children[1].value
-            user = interaction.message.mentions[0]
-            await interaction.guild.timeout(user, duration * 60, reason=reason)
-            await interaction.response.send_message(f"{user.mention} a été mute pour {duration} minutes. Raison : {reason}")
+            reason = self.reason_input.value
+            await self.member.timeout_for(
+                discord.utils.utcnow() + discord.timedelta(minutes=duration),
+                reason=reason
+            )
+            await interaction.response.send_message(
+                f"{self.member.mention} a été mute pour {duration} minutes. Raison : {reason}"
+            )
         except ValueError:
-            await interaction.response.send_message("Veuillez entrer une durée valide.", ephemeral=True)
+            await interaction.response.send_message(
+                "Veuillez entrer une durée valide.",
+                ephemeral=True
+            )
 
 # Commande pour mute vocal
 @bot.command()
@@ -66,8 +88,9 @@ async def mutevocal(ctx, member: discord.Member):
     user_roles = [role.id for role in ctx.author.roles]
     for role, max_time in MUTE_LIMITS.items():
         if ROLE_IDS[role] in user_roles:
-            modal = MuteModal(max_time)
-            await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour muter {member.mention}.", view=modal)
+            modal = MuteModal(max_time, member)
+            await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour muter {member.mention}.")
+            await ctx.send_modal(modal)
             return
     await ctx.send("Vous n'avez pas la permission de mute.")
 
@@ -122,8 +145,9 @@ def get_previous_role(current_role):
 # Commande pour avertissement
 @bot.command()
 async def avert(ctx, member: discord.Member):
-    modal = MuteModal(max_time=0)  # Pas de durée limite pour avert
-    await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour avertir {member.mention}.", view=modal)
+    modal = MuteModal(max_time=0, member=member)  # Pas de durée limite pour avert
+    await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour avertir {member.mention}.")
+    await ctx.send_modal(modal)
 
 # Démarrage du bot
 bot.run("YOUR_DISCORD_BOT_TOKEN")
