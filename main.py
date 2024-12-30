@@ -76,6 +76,7 @@ def has_permission(ctx, target_member):
     # On vérifie si l'utilisateur a un rôle plus élevé dans la hiérarchie que la cible
     for role_id in sorted(ROLE_IDS.values(), reverse=True):
         if role_id in user_roles:
+            # L'utilisateur doit avoir un rôle plus élevé que la cible
             if any(role.id in target_roles for role in ctx.guild.roles):
                 return True
             else:
@@ -140,39 +141,17 @@ class MuteModal(Modal):
                 ephemeral=True
             )
 
-# Commande pour derank
-@bot.command()
-async def derank(ctx, member: discord.Member, reason: str = None):
-    if not reason:
-        await ctx.send("Tu dois spécifier une raison à la suite de la commande.\nExemple : `+derank @Merguez pour mauvaise conduite`")
-        return
-
-    if not has_permission(ctx, member):
-        await ctx.send(f"Tu n'as pas la permission de retirer un rôle à {member.mention} car il a un rôle supérieur ou égal au tien.")
-        return
-
-    # Retirer un rôle spécifique du membre
-    current_role = max(member.roles, key=lambda r: r.position)
-    lower_roles = sorted(ctx.guild.roles, key=lambda r: r.position, reverse=True)
-    for role in lower_roles:
-        if role.position < current_role.position:
-            await member.remove_roles(role)
-            await ctx.send(f"{member.mention} a perdu le rôle {role.name} pour la raison : {reason}.")
-            return
-    await ctx.send(f"{member.mention} n'a pas de rôle inférieur à celui-ci.")
-
 # Commande pour rankup
 @bot.command()
-async def rankup(ctx, member: discord.Member, reason: str = None):
-    if not reason:
-        await ctx.send("Tu dois spécifier une raison à la suite de la commande.\nExemple : `+rankup @Merguez pour bon comportement`")
+async def rankup(ctx, member: discord.Member = None, *, reason: str = None):
+    if not member or not reason:
+        await ctx.send("Tu dois spécifier un membre et une raison pour la commande. Exemple : `+rankup @Merguez pour bon comportement`")
         return
 
     if not has_permission(ctx, member):
         await ctx.send(f"Tu n'as pas la permission de rankup {member.mention} car il a un rôle supérieur ou égal au tien.")
         return
 
-    # Suppression de l'ancien rôle et ajout du nouveau
     current_role = max(member.roles, key=lambda r: r.position)
     new_role = discord.utils.get(ctx.guild.roles, id=ROLE_IDS["perm5"])  # Exemple pour ajouter perm5
 
@@ -183,35 +162,32 @@ async def rankup(ctx, member: discord.Member, reason: str = None):
     else:
         await ctx.send(f"{member.mention} a déjà le rôle {new_role.name}.")
 
-# Commande pour mutechat
+# Commande pour derank
 @bot.command()
-async def mutechat(ctx, member: discord.Member, time: str, reason: str):
-    if not time or not reason:
-        await ctx.send("Tu dois spécifier la durée et la raison à la suite de la commande.\nExemple : `+mutechat @Merguez 20m troll`")
+async def derank(ctx, member: discord.Member = None, *, reason: str = None):
+    if not member or not reason:
+        await ctx.send("Tu dois spécifier un membre et une raison pour la commande. Exemple : `+derank @Merguez pour comportement inapproprié`")
         return
 
     if not has_permission(ctx, member):
-        await ctx.send(f"Tu n'as pas la permission de mute {member.mention} car il a un rôle supérieur ou égal au tien.")
+        await ctx.send(f"Tu n'as pas la permission de derank {member.mention} car il a un rôle supérieur ou égal au tien.")
         return
 
-    # Validation de la durée
-    if time.endswith('m'):
-        minutes = int(time[:-1])  # Extraction des minutes
-    elif time.endswith('h'):
-        minutes = int(time[:-1]) * 60  # Conversion des heures en minutes
+    current_role = max(member.roles, key=lambda r: r.position)
+    new_role = discord.utils.get(ctx.guild.roles, id=ROLE_IDS["perm4"])  # Exemple pour retirer perm5
+
+    if current_role != new_role:
+        await member.remove_roles(current_role)
+        await member.add_roles(new_role)
+        await ctx.send(f"{member.mention} a été rétrogradé à {new_role.name}.")
     else:
-        await ctx.send("Le format du temps est invalide. Utilisez 'm' pour minutes et 'h' pour heures.")
-        return
-
-    avert_channel = ctx.guild.get_channel(ROLE_IDS["avertissements"])
-    await avert_channel.send(f"{member.mention} a été mute dans le chat pour {minutes} minutes. Raison : {reason}.")
-    await ctx.send(f"{member.mention} a été mute dans le chat pour {minutes} minutes. Raison : {reason}.")
+        await ctx.send(f"{member.mention} a déjà le rôle {new_role.name}.")
 
 # Commande pour avertir
 @bot.command()
-async def avert(ctx, member: discord.Member, reason: str = None):
-    if not reason:
-        await ctx.send("Tu dois spécifier une raison à la suite de la commande.\nExemple : `+avert @Merguez troll`")
+async def avert(ctx, member: discord.Member = None, *, reason: str = None):
+    if not member or not reason:
+        await ctx.send("Tu dois spécifier un membre et une raison pour la commande. Exemple : `+avert @Merguez pour troll`")
         return
 
     if not has_permission(ctx, member):
@@ -222,6 +198,75 @@ async def avert(ctx, member: discord.Member, reason: str = None):
     await avert_channel.send(f"**Avertissement:** {ctx.author.mention} a averti {member.mention} pour : {reason}.")
     await ctx.send(f"Avertissement envoyé à {member.mention} avec la raison : {reason}.")
 
-# Lancer le bot et garder le serveur en ligne
+# Commande pour mutechat
+@bot.command()
+async def mutechat(ctx, member: discord.Member = None, time: str = None, *, reason: str = None):
+    if not member or not time or not reason:
+        await ctx.send("Tu dois spécifier un membre, un temps (en minutes ou heures) et une raison. Exemple : `+mutechat @Merguez 20m pour spam`")
+        return
+
+    if not has_permission(ctx, member):
+        await ctx.send(f"Tu n'as pas la permission de mute {member.mention} car il a un rôle supérieur ou égal au tien.")
+        return
+
+    try:
+        if time.endswith('m'):
+            minutes = int(time[:-1])
+        elif time.endswith('h'):
+            hours = int(time[:-1])
+            minutes = hours * 60
+        else:
+            raise ValueError
+    except ValueError:
+        await ctx.send("Le format du temps est invalide. Utilise 'm' pour minutes et 'h' pour heures.")
+        return
+
+    await member.timeout(discord.utils.utcnow() + discord.timedelta(minutes=minutes), reason=reason)
+    await ctx.send(f"{member.mention} a été mute pour {minutes} minutes. Raison : {reason}.")
+
+# Commande pour mute vocal
+@bot.command()
+async def mutevocal(ctx, member: discord.Member = None, time: str = None, *, reason: str = None):
+    if not member or not time or not reason:
+        await ctx.send("Tu dois spécifier un membre, un temps (en minutes ou heures) et une raison. Exemple : `+mutevocal @Merguez 20m pour troll`")
+        return
+
+    if not has_permission(ctx, member):
+        await ctx.send(f"Tu n'as pas la permission de mute vocal {member.mention} car il a un rôle supérieur ou égal au tien.")
+        return
+
+    try:
+        if time.endswith('m'):
+            minutes = int(time[:-1])
+        elif time.endswith('h'):
+            hours = int(time[:-1])
+            minutes = hours * 60
+        else:
+            raise ValueError
+    except ValueError:
+        await ctx.send("Le format du temps est invalide. Utilise 'm' pour minutes et 'h' pour heures.")
+        return
+
+    await member.timeout(discord.utils.utcnow() + discord.timedelta(minutes=minutes), reason=reason)
+    await ctx.send(f"{member.mention} a été mute dans le vocal pour {minutes} minutes. Raison : {reason}.")
+
+# Commande pour afficher la liste des commandes
+@bot.command()
+async def commands(ctx):
+    embed = discord.Embed(
+        title="Liste des commandes disponibles",
+        description="Voici les commandes disponibles sur ce serveur.",
+        color=discord.Color.green()
+    )
+
+    embed.add_field(name="+rankup", value="Promouvoir un utilisateur à un rôle supérieur. Exemple : `+rankup @Merguez pour bon comportement`")
+    embed.add_field(name="+derank", value="Rétrograder un utilisateur à un rôle inférieur. Exemple : `+derank @Merguez pour comportement inapproprié`")
+    embed.add_field(name="+mutechat", value="Mute un utilisateur dans le chat. Exemple : `+mutechat @Merguez 20m pour spam`")
+    embed.add_field(name="+mutevocal", value="Mute un utilisateur dans le vocal. Exemple : `+mutevocal @Merguez 10m pour troll`")
+    embed.add_field(name="+avert", value="Avertir un utilisateur. Exemple : `+avert @Merguez pour comportement mauvais`")
+
+    await ctx.send(embed=embed)
+
+# Lancer le bot
 keep_alive()
 bot.run(TOKEN)
