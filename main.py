@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from discord.ui import Modal, TextInput
+from discord.ui import Modal, TextInput, View
 
 # Configuration de base du bot
 intents = discord.Intents.all()
@@ -38,10 +38,10 @@ MUTE_LIMITS = {
     "owner": 60
 }
 
-# Classe pour le mute vocal
+# Classe pour le modal de mute
 class MuteModal(Modal):
     def __init__(self, max_time, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(title="Mute Vocal", *args, **kwargs)
         self.max_time = max_time
         self.add_item(TextInput(label="Durée du mute (en minutes)", placeholder=f"Max : {max_time} minutes"))
         self.add_item(TextInput(label="Raison du mute", placeholder="Indiquez la raison"))
@@ -66,7 +66,7 @@ async def mutevocal(ctx, member: discord.Member):
     user_roles = [role.id for role in ctx.author.roles]
     for role, max_time in MUTE_LIMITS.items():
         if ROLE_IDS[role] in user_roles:
-            modal = MuteModal(max_time, title="Mute Vocal")
+            modal = MuteModal(max_time)
             await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour muter {member.mention}.", view=modal)
             return
     await ctx.send("Vous n'avez pas la permission de mute.")
@@ -122,7 +122,7 @@ def get_previous_role(current_role):
 # Commande pour avertissement
 @bot.command()
 async def avert(ctx, member: discord.Member):
-    modal = MuteModal(max_time=0, title="Avertissement")  # Pas de durée limite pour avert
+    modal = MuteModal(max_time=0)  # Pas de durée limite pour avert
     await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour avertir {member.mention}.", view=modal)
 
 # Démarrage du bot
