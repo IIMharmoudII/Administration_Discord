@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from discord.ui import Modal, InputText
+from discord.ui import Modal, TextInput
 
 # Configuration de base du bot
 intents = discord.Intents.all()
@@ -127,4 +127,4 @@ async def avert(ctx, member: discord.Member):
     await ctx.send(f"{ctx.author.mention}, veuillez remplir les informations pour avertir {member.mention}.", view=modal)
 
 # Démarrage du bot
-bot.run("YOUR_DISCORD_BOT_TOKEN")
+bot.run("BOT_TOKEN")
